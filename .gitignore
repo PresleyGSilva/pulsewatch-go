@@ -1,0 +1,10 @@
+.env
+node_modules/
+.next/
+*.log
+dist/
+bin/
+pulsewatch
+web/.next/
+web/node_modules/
+data/

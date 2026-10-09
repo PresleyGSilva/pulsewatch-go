@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS alert_logs;
+DROP TABLE IF EXISTS incidents;
+DROP TABLE IF EXISTS checks;
+DROP TABLE IF EXISTS monitors;

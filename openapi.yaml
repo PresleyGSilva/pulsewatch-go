@@ -1,0 +1,284 @@
+openapi: 3.0.3
+info:
+  title: PulseWatch API
+  version: 1.0.0
+  description: Canonical prefix is /api/v1. The same routes are also served
+    without prefix (e.g. POST /auth/login) for the status-page frontend.
+servers:
+  - url: http://localhost:8086
+tags:
+  - name: auth
+  - name: monitors
+  - name: incidents
+  - name: public
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    OrgID:
+      name: X-Org-ID
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string }
+        name: { type: string }
+    Org:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+    Monitor:
+      type: object
+      properties:
+        id: { type: string }
+        org_id: { type: string }
+        name: { type: string }
+        url: { type: string }
+        method: { type: string, default: GET }
+        interval_seconds: { type: integer, default: 60 }
+        timeout_ms: { type: integer, default: 8000 }
+        expect_status: { type: integer, default: 200 }
+        expect_body_contains: { type: string }
+        webhook_url: { type: string }
+        active: { type: boolean }
+        consecutive_failures: { type: integer }
+        last_status: { type: string }
+        last_checked_at: { type: string, nullable: true }
+        created_at: { type: string }
+        updated_at: { type: string }
+    MonitorInput:
+      type: object
+      required: [name, url]
+      properties:
+        name: { type: string }
+        url: { type: string }
+        method: { type: string, enum: [GET, POST, HEAD, PUT, DELETE, PATCH] }
+        interval_seconds: { type: integer, minimum: 10, maximum: 3600 }
+        timeout_ms: { type: integer, minimum: 1000, maximum: 30000 }
+        expect_status: { type: integer }
+        expect_body_contains: { type: string }
+        webhook_url: { type: string }
+        active: { type: boolean }
+    Check:
+      type: object
+      properties:
+        id: { type: string }
+        monitor_id: { type: string }
+        org_id: { type: string }
+        status_code: { type: integer }
+        ok: { type: boolean }
+        latency_ms: { type: integer }
+        error: { type: string }
+        checked_at: { type: string }
+    Incident:
+      type: object
+      properties:
+        id: { type: string }
+        monitor_id: { type: string }
+        monitor_name: { type: string }
+        org_id: { type: string }
+        started_at: { type: string }
+        resolved_at: { type: string, nullable: true }
+        status: { type: string }
+        cause: { type: string }
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: ok
+  /openapi.yaml:
+    get:
+      summary: OpenAPI spec
+      responses:
+        '200':
+          description: yaml
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string, minLength: 8 }
+                name: { type: string }
+      responses:
+        '200':
+          description: '{data:{user, orgs, access_token}} + pw_refresh cookie'
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: '{data:{user, orgs, access_token}} + pw_refresh cookie'
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      responses:
+        '200':
+          description: rotates refresh cookie, returns access_token
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      responses:
+        '200':
+          description: clears refresh cookie
+  /api/v1/monitors:
+    get:
+      tags: [monitors]
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrgID'
+        - { name: active, in: query, schema: { type: boolean } }
+      responses:
+        '200': { description: '{data:Monitor[]} — each row enriched with uptime_24h, last_code, last_latency_ms' }
+    post:
+      tags: [monitors]
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrgID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MonitorInput' }
+      responses:
+        '201': { description: '{data:Monitor}' }
+  /api/v1/monitors/{id}:
+    get:
+      tags: [monitors]
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrgID'
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: '{data:Monitor}' }
+    put:
+      tags: [monitors]
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrgID'
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MonitorInput' }
+      responses:
+        '200': { description: '{data:Monitor}' }
+    delete:
+      tags: [monitors]
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrgID'
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: '{data:{ok:true}}' }
+  /api/v1/monitors/{id}/checks:
+    get:
+      tags: [monitors]
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrgID'
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 50 } }
+      responses:
+        '200': { description: '{data:Check[]}' }
+  /api/v1/monitors/{id}/uptime:
+    get:
+      tags: [monitors]
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrgID'
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: hours, in: query, schema: { type: integer, default: 24 } }
+      responses:
+        '200': { description: '{data:{uptime_pct,total,ok,hours}}' }
+  /api/v1/monitors/{id}/check:
+    post:
+      tags: [monitors]
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrgID'
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: manual check result (rate-limited 1/10s) }
+        '429': { description: rate limited }
+  /api/v1/monitors/{id}/incidents:
+    get:
+      tags: [monitors]
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrgID'
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: '{data:Incident[]} for one monitor' }
+  /api/v1/incidents:
+    get:
+      tags: [incidents]
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrgID'
+        - { name: status, in: query, schema: { type: string, enum: [open, resolved] } }
+      responses:
+        '200': { description: '{data:Incident[]}' }
+  /api/v1/incidents/{id}/resolve:
+    post:
+      tags: [incidents]
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrgID'
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: '{data:{ok:true}}' }
+  /api/v1/alerts:
+    get:
+      tags: [monitors]
+      security: [{ bearer: [] }]
+      parameters:
+        - $ref: '#/components/parameters/OrgID'
+      responses:
+        '200': { description: recent alert_logs (100) }
+  /api/v1/public/{slug}/status:
+    get:
+      tags: [public]
+      parameters:
+        - { name: slug, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: '{data:{org, monitors[], open_incidents[]}} (no auth)' }

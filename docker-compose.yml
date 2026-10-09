@@ -1,0 +1,48 @@
+name: pulsewatch-go
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pulsewatch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pulsewatch}
+      POSTGRES_DB: ${POSTGRES_DB:-pulsewatch}
+    ports:
+      - "${DB_PORT:-5439}:5432"
+    volumes:
+      - pw_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-pulsewatch}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-pulsewatch}:${POSTGRES_PASSWORD:-pulsewatch}@db:5432/${POSTGRES_DB:-pulsewatch}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-at-least-16-chars}
+      PORT: "8086"
+      SEED: ${SEED:-1}
+    ports:
+      - "${API_PORT:-8086}:8086"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8086}
+    environment:
+      PORT: "3006"
+    ports:
+      - "${WEB_PORT:-3006}:3006"
+    depends_on:
+      - api
+
+volumes:
+  pw_data:
