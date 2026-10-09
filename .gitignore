@@ -8,3 +8,4 @@ pulsewatch
 web/.next/
 web/node_modules/
 data/
+*.tsbuildinfo
